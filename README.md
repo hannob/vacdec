@@ -13,4 +13,26 @@ how these certificates are encoded:
 * Decoding the base45 leads to zlib-compressed data.
 * Decompression leads to a CBOR Web Token structure.
 
+## setup
+
+You will need the python pillow, pyzbar, cbor2 and base45 packages.
+You can install them via your distribution or via pip:
+
+```
+pip install base45 cbor2 pillow pyzbar
+```
+
+## usage
+
+Run:
+
+```
+./vacdec [image]
+```
+
+[image] can be an image in any format pillow supports, including of
+course PNG and JPG.
+
+## author
+
 Written by [Hanno Böck](https://hboeck.de/).
