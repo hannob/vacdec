@@ -8,7 +8,7 @@ import PIL.Image
 import pyzbar.pyzbar
 import base45
 import cbor2
-breakpoint()
+
 data = pyzbar.pyzbar.decode(PIL.Image.open(sys.argv[1]))
 cert = data[0].data.decode()
 
