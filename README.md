@@ -19,7 +19,7 @@ You will need the python pillow, pyzbar, cbor2 and base45 packages.
 You can install them via your distribution or via pip:
 
 ```
-pip install base45 cbor2 pillow pyzbar
+pip install -r requirements.txt
 ```
 
 ## usage
