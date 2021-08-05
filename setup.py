@@ -10,6 +10,6 @@ setup(
     author_email='',
     description='',
     python_requires='>=3.7, <4',
-    install_requires=['base45', 'cbor2', 'pillow', 'pyzbar', 'cose'],
-    scripts=['cert-check.py'],
+    install_requires=['base45', 'cbor2', 'pillow', 'pyzbar', 'cose', 'cryptojwt', 'pyasn1'],
+    scripts=['vacdec'],
 )

@@ -6,20 +6,29 @@ import argparse
 import sys
 import zlib
 import logging
-import pprint
+from typing import Dict, Tuple, Optional
 
 import PIL.Image
 import pyzbar.pyzbar
 
 import json
 import base45
+import base64
 import cbor2
+from cose.headers import Algorithm, KID
 from cose.messages import CoseMessage
+from cose.keys import cosekey, ec2, keyops, curves
+
+from cryptography import x509
+from cryptography import hazmat
+from pyasn1.codec.ber import decoder as asn1_decoder
+from cryptojwt import jwk as cjwtk
+from cryptojwt import utils as cjwt_utils
 
 log = logging.getLogger(__name__)
 
+DEFAULT_CERTIFICATE_DB_JSON = 'certs/Digital_Green_Certificate_Signing_Keys.json'
 
-# https://alphalist.com/blog/the-use-of-blockchain-for-verification-eu-vaccines-passport-program-and-more
 
 def _setup_logger() -> None:
     log_formatter = logging.Formatter("%(asctime)s [%(levelname)-5.5s]  %(message)s")
@@ -27,10 +36,126 @@ def _setup_logger() -> None:
     console_handler.setFormatter(log_formatter)
     console_handler.propagate = False
     logging.getLogger().addHandler(console_handler)
-    log.setLevel(logging.DEBUG)
+    # log.setLevel(logging.DEBUG)
+    log.setLevel(logging.INFO)
 
 
-def output_covid_cert_data(cert: str) -> None:
+def find_key(key: Algorithm, keys_file: str) -> Optional[cosekey.CoseKey]:
+    if False:
+        # Test read a PEM-key
+        jwt_key = read_cosekey_from_pem_file("certs/Finland.pem")
+        # pprint(jwt_key)
+        # pprint(jwt_key.kid.decode())
+
+    # Read the JSON-database of all known keys
+    with open(keys_file, encoding='utf-8') as f:
+        known_keys = json.load(f)
+
+    jwt_key = None
+    for key_id, key_data in known_keys.items():
+        key_id_binary = base64.b64decode(key_id)
+        if key_id_binary == key:
+            log.info("Found the key from DB!")
+            # pprint(key_data)
+            # check if the point is uncompressed rather than compressed
+            x, y = public_ec_key_points(base64.b64decode(key_data['publicKeyPem']))
+            key_dict = {'crv': key_data['publicKeyAlgorithm']['namedCurve'],  # 'P-256'
+                        'kid': key_id_binary.hex(),
+                        'kty': key_data['publicKeyAlgorithm']['name'][:2],  # 'EC'
+                        'x': x,  # 'eIBWXSaUgLcxfjhChSkV_TwNNIhddCs2Rlo3tdD671I'
+                        'y': y,  # 'R1XB4U5j_IxRgIOTBUJ7exgz0bhen4adlbHkrktojjo'
+                        }
+            jwt_key = cosekey_from_jwk_dict(key_dict)
+            break
+
+    if not jwt_key:
+        return None
+
+    if jwt_key.kid.decode() != key.hex():
+        raise RuntimeError("Internal: No key for {0}!".format(key.hex()))
+
+    return jwt_key
+
+
+def public_ec_key_points(public_key: bytes) -> Tuple[str, str]:
+    # This code adapted from: https://stackoverflow.com/a/59537764/1548275
+    public_key_asn1, _remainder = asn1_decoder.decode(public_key)
+    public_key_bytes = public_key_asn1[1].asOctets()
+
+    off = 0
+    if public_key_bytes[off] != 0x04:
+        raise ValueError("EC public key is not an uncompressed point")
+    off += 1
+
+    size_bytes = (len(public_key_bytes) - 1) // 2
+
+    x_bin = public_key_bytes[off:off + size_bytes]
+    x = int.from_bytes(x_bin, 'big', signed=False)
+    off += size_bytes
+
+    y_bin = public_key_bytes[off:off + size_bytes]
+    y = int.from_bytes(y_bin, 'big', signed=False)
+    off += size_bytes
+
+    bl = (x.bit_length() + 7) // 8
+    bytes_val = x.to_bytes(bl, 'big')
+    x_str = base64.b64encode(bytes_val, altchars='-_'.encode()).decode()
+
+    bl = (y.bit_length() + 7) // 8
+    bytes_val = y.to_bytes(bl, 'big')
+    y_str = base64.b64encode(bytes_val, altchars='-_'.encode()).decode()
+
+    return x_str, y_str
+
+
+# Create CoseKey from JWK
+def cosekey_from_jwk_dict(jwk_dict: Dict) -> cosekey.CoseKey:
+    # Read key and return CoseKey
+    if jwk_dict["kty"] != "EC":
+        raise ValueError("Only EC keys supported")
+    if jwk_dict["crv"] != "P-256":
+        raise ValueError("Only P-256 supported")
+
+    from pprint import pprint
+    key = ec2.EC2(
+        crv=curves.P256,
+        x=cjwt_utils.b64d(jwk_dict["x"].encode()),
+        y=cjwt_utils.b64d(jwk_dict["y"].encode()),
+    )
+    key.key_ops = [keyops.VerifyOp]
+    if "kid" in jwk_dict:
+        key.kid = bytes(jwk_dict["kid"], "UTF-8")
+
+    return key
+
+
+# Create JWK and valculate KID from Public Signing Certificate
+def read_cosekey_from_pem_file(cert_file: str) -> cosekey.CoseKey:
+    # Read certificate, calculate kid and return EC CoseKey
+    if not cert_file.endswith(".pem"):
+        raise ValueError("Unknown key format. Use .pem keyfile")
+
+    with open(cert_file, 'rb') as f:
+        cert_data = f.read()
+        # Calculate Hash from the DER format of the Certificate
+        cert = x509.load_pem_x509_certificate(cert_data, hazmat.backends.default_backend())
+        keyidentifier = cert.fingerprint(hazmat.primitives.hashes.SHA256())
+    f.close()
+    key = cert.public_key()
+
+    jwk = cjwtk.ec.ECKey()
+    jwk.load_key(key)
+    # Use first 8 bytes of the hash as Key Identifier (Hex as UTF-8)
+    jwk.kid = keyidentifier[:8].hex()
+    jwk_dict = jwk.serialize(private=False)
+
+    return cosekey_from_jwk_dict(jwk_dict)
+
+
+def output_covid_cert_data(cert: str, keys_file: str) -> None:
+    # Code adapted from:
+    # https://alphalist.com/blog/the-use-of-blockchain-for-verification-eu-vaccines-passport-program-and-more
+
     # Strip the first characters to form valid Base45-encoded data
     b45data = cert[4:]
 
@@ -41,14 +166,40 @@ def output_covid_cert_data(cert: str) -> None:
     decompressed = zlib.decompress(zlibdata)
 
     # decode COSE message (no signature verification done)
-    cose = CoseMessage.decode(decompressed)
-    #pprint.pprint(cose)
+    cose_msg = CoseMessage.decode(decompressed)
+    # pprint.pprint(cose_msg)
 
     # decode the CBOR encoded payload and print as json
-    log.debug(cose.phdr)
-    log.debug(cose.uhdr)
-    log.debug(cose.key)
-    print(json.dumps(cbor2.loads(cose.payload), indent=2))
+    log.debug(cose_msg.phdr)
+    if KID in cose_msg.phdr:
+        log.info("COVID certificate signed with X.509 certificate.")
+        log.info("X.509 in DER form has SHA-256 beginning with: {0}".format(
+            cose_msg.phdr[KID].hex()))
+        key = find_key(cose_msg.phdr[KID], keys_file)
+        if key:
+            verify_signature(cose_msg, key)
+        else:
+            log.info("Skip verify as no key found from database")
+    else:
+        log.info("Certificate is not signed")
+    # log.debug(cose_msg.uhdr)
+    # log.debug(cose_msg.key)
+    cbor = cbor2.loads(cose_msg.payload)
+    # Note: Some countries have hour:minute:secod for sc-field (Date/Time of Sample Collection).
+    # If used, this will decode as a datetime. A datetime cannot be JSON-serialized without hints (use str as default).
+    # Note 2: Names may contain non-ASCII characters in UTF-8
+    log.info("Certificate as JSON: {0}".format(json.dumps(cbor, indent=2, default=str, ensure_ascii=False)))
+
+
+def verify_signature(cose_msg: CoseMessage, key: cosekey.CoseKey) -> bool:
+    cose_msg.key = key
+    if not cose_msg.verify_signature():
+        log.warning("Signature does not verify with key ID {0}!".format(key.kid.decode()))
+        return False
+
+    log.info("Signature verified ok")
+
+    return cose_msg.verify_signature()
 
 
 def main() -> None:
@@ -57,23 +208,33 @@ def main() -> None:
                         help='Image to read QR-code from')
     parser.add_argument('--raw-string', metavar="RAW-STRING",
                         help='Contents of the QR-code as string')
+    parser.add_argument('image_file_positional', metavar="IMAGE-FILE", nargs="?",
+                        help='Image to read QR-code from')
+    parser.add_argument('--certificate-db-json-file', default=DEFAULT_CERTIFICATE_DB_JSON,
+                        help="Default: {0}".format(DEFAULT_CERTIFICATE_DB_JSON))
 
     args = parser.parse_args()
     _setup_logger()
 
-    cert = None
-    if args.image_file:
-        data = pyzbar.pyzbar.decode(PIL.Image.open(args.image_file))
-        cert = data[0].data.decode()
+    covid_cert_data = None
+    image_file = None
+    if args.image_file_positional:
+        image_file = args.image_file_positional
+    elif args.image_file:
+        image_file = args.image_file
+
+    if image_file:
+        data = pyzbar.pyzbar.decode(PIL.Image.open(image_file))
+        covid_cert_data = data[0].data.decode()
     elif args.raw_string:
-        cert = args.raw_string
+        covid_cert_data = args.raw_string
     else:
-        log.error("Input parameters: Need either image file or raw QR-code content.")
+        log.error("Input parameters: Need either --image-file or --raw-string QR-code content.")
         exit(2)
 
     # Got the data, output
-    log.debug("Cert data: '{}'".format(cert))
-    output_covid_cert_data(cert)
+    log.debug("Cert data: '{}'".format(covid_cert_data))
+    output_covid_cert_data(covid_cert_data, args.certificate_db_json_file)
 
 
 if __name__ == '__main__':
