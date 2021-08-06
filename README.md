@@ -104,4 +104,4 @@ https://github.com/eu-digital-green-certificates/dgc-testdata
 ## author
 
 Written by [Hanno Böck](https://hboeck.de/).
-Signature verificatiton by [Jari Turkia](https://blog.hqcodeshop.fi/).
+Signature verification by [Jari Turkia](https://blog.hqcodeshop.fi/).
