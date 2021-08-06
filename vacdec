@@ -2,9 +2,10 @@
 
 # vim: autoindent tabstop=4 shiftwidth=4 expandtab softtabstop=4 filetype=python
 
-import argparse
+import os
 import sys
 import zlib
+import argparse
 import logging
 from typing import Dict, Tuple, Optional
 
@@ -17,7 +18,8 @@ import base64
 import cbor2
 from cose.headers import Algorithm, KID
 from cose.messages import CoseMessage
-from cose.keys import cosekey, ec2, keyops, curves
+from cose.keys import cosekey, ec2, keyops, keyparam, curves, keytype
+from cose import algorithms
 
 from cryptography import x509
 from cryptography import hazmat
@@ -27,7 +29,8 @@ from cryptojwt import utils as cjwt_utils
 
 log = logging.getLogger(__name__)
 
-DEFAULT_CERTIFICATE_DB_JSON = 'certs/Digital_Green_Certificate_Signing_Keys.json'
+DEFAULT_CERTIFICATE_DB_JSON = 'certs/roots/Digital_Green_Certificate_Signing_Keys.json'
+DEFAULT_CERTIFICATE_DIRECTORY = 'certs'
 
 
 def _setup_logger() -> None:
@@ -40,41 +43,105 @@ def _setup_logger() -> None:
     log.setLevel(logging.INFO)
 
 
-def find_key(key: Algorithm, keys_file: str) -> Optional[cosekey.CoseKey]:
+def find_key(key: KID, keys_file: str) -> Optional[cosekey.CoseKey]:
     if False:
         # Test read a PEM-key
-        jwt_key = read_cosekey_from_pem_file("certs/Finland.pem")
-        # pprint(jwt_key)
-        # pprint(jwt_key.kid.decode())
+        cose_key = read_cosekey_from_pem_file("certs/Finland.pem")
+        # pprint(cose_key)
+        # pprint(cose_key.kid.decode())
 
-    # Read the JSON-database of all known keys
-    with open(keys_file, encoding='utf-8') as f:
-        known_keys = json.load(f)
+    key_id_str = key.hex()
+    pem_filename = "{}/{}.pem".format(DEFAULT_CERTIFICATE_DIRECTORY, key_id_str)
+    log.debug("Check if certificate {} exists.".format(pem_filename))
+    if os.path.exists(pem_filename):
+        with open(pem_filename, "rb") as pem_file:
+            lines = pem_file.read()
+        cert = x509.load_pem_x509_certificate(lines)
+        try:
+            subject = cert.subject
+        except ValueError:
+            subject = None
+        if subject:
+            subject_parts = []
+            for subject_compo in subject:
+                subject_parts.append("{} = {}".format(subject_compo.oid._name, subject_compo.value))
+            log.debug("Certificate subject: {}".format(', '.join(subject_parts)))
+        else:
+            log.debug("Certificate has no subject")
+        log.info("Using certificate {}".format(pem_filename))
+        cose_key = _cert_to_cose_key(cert, key)
+    else:
+        # Read the JSON-database of all known keys
+        with open(keys_file, encoding='utf-8') as f:
+            known_keys = json.load(f)
 
-    jwt_key = None
-    for key_id, key_data in known_keys.items():
-        key_id_binary = base64.b64decode(key_id)
-        if key_id_binary == key:
-            log.info("Found the key from DB!")
-            # pprint(key_data)
-            # check if the point is uncompressed rather than compressed
-            x, y = public_ec_key_points(base64.b64decode(key_data['publicKeyPem']))
-            key_dict = {'crv': key_data['publicKeyAlgorithm']['namedCurve'],  # 'P-256'
-                        'kid': key_id_binary.hex(),
-                        'kty': key_data['publicKeyAlgorithm']['name'][:2],  # 'EC'
-                        'x': x,  # 'eIBWXSaUgLcxfjhChSkV_TwNNIhddCs2Rlo3tdD671I'
-                        'y': y,  # 'R1XB4U5j_IxRgIOTBUJ7exgz0bhen4adlbHkrktojjo'
-                        }
-            jwt_key = cosekey_from_jwk_dict(key_dict)
-            break
+        cose_key = None
+        for key_id, key_data in known_keys.items():
+            key_id_binary = base64.b64decode(key_id)
+            if key_id_binary == key:
+                log.info("Found the key from DB!")
+                # pprint(key_data)
+                # check if the point is uncompressed rather than compressed
+                x, y = public_ec_key_points(base64.b64decode(key_data['publicKeyPem']))
+                key_dict = {'crv': key_data['publicKeyAlgorithm']['namedCurve'],  # 'P-256'
+                            'kid': key_id_binary.hex(),
+                            'kty': key_data['publicKeyAlgorithm']['name'][:2],  # 'EC'
+                            'x': x,  # 'eIBWXSaUgLcxfjhChSkV_TwNNIhddCs2Rlo3tdD671I'
+                            'y': y,  # 'R1XB4U5j_IxRgIOTBUJ7exgz0bhen4adlbHkrktojjo'
+                            }
+                cose_key = cosekey_from_jwk_dict(key_dict)
+                break
 
-    if not jwt_key:
-        return None
+        if not cose_key:
+            return None
 
-    if jwt_key.kid.decode() != key.hex():
+    if cose_key.kid.decode() != key.hex():
         raise RuntimeError("Internal: No key for {0}!".format(key.hex()))
 
-    return jwt_key
+    return cose_key
+
+
+def _cert_to_cose_key(cert: x509.Certificate, key_id: KID = None) -> cosekey.CoseKey:
+    public_key = cert.public_key()
+    key_dict = None
+
+    if isinstance(public_key, hazmat.primitives.asymmetric.ec.EllipticCurvePublicKey):
+        curve_name = public_key.curve.name
+        matching_curve = None
+        for name in dir(curves):
+            if name.startswith('_'):
+                continue
+            if curve_name.lower() == name.lower():
+                if name == 'SECP256R1':
+                    matching_curve = curves.P256
+                elif name == 'SECP384R1':
+                    matching_curve = curves.P384
+                else:
+                    raise RuntimeError("Unknown curve {}!".format(curve_name))
+                break
+
+        if not matching_curve:
+            raise RuntimeError("Could not find curve {} used in X.509 certificate from COSE!".format(curve_name))
+
+        public_numbers = public_key.public_numbers()
+        size_bytes = public_key.curve.key_size // 8
+        x = public_numbers.x.to_bytes(size_bytes, byteorder="big")
+        y = public_numbers.y.to_bytes(size_bytes, byteorder="big")
+        key_dict = {
+            keyparam.KpKeyOps: [keyops.VerifyOp],
+            keyparam.KpKty: keytype.KtyEC2,
+            keyparam.EC2KpCurve: matching_curve,
+            keyparam.KpAlg: algorithms.Es256,
+            keyparam.EC2KpX: x,
+            keyparam.EC2KpY: y,
+            keyparam.KpKid: bytes(key_id.hex(), "ASCII")
+        }
+    else:
+        raise RuntimeError("Cannot handle RSA-keys!")
+
+    key = cosekey.CoseKey.from_dict(key_dict)
+
+    return key
 
 
 def public_ec_key_points(public_key: bytes) -> Tuple[str, str]:
