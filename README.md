@@ -101,6 +101,12 @@ https://github.com/eu-digital-green-certificates/dgc-testdata
   * JSON-list: https://raw.githubusercontent.com/lovasoa/sanipasse/master/src/assets/Digital_Green_Certificate_Signing_Keys.json
 * Swedish list of all certificates: https://dgcg.covidbevis.se/tp/
 
+## Fetch Signature Certificates in PEM-format
+There is a tool `fetch-signing-certificates.py` which will read the entire list of
+signing certificates from Austria's endpoint.
+
+Results are stored (by default) into directory `certs/`.
+
 ## author
 
 Written by [Hanno Böck](https://hboeck.de/).
