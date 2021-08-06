@@ -203,7 +203,7 @@ def verify_signature(cose_msg: CoseMessage, key: cosekey.CoseKey) -> bool:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description='Collected data analysator')
+    parser = argparse.ArgumentParser(description='EU COVID Vaccination Passport Verifier')
     parser.add_argument('--image-file', metavar="IMAGE-FILE",
                         help='Image to read QR-code from')
     parser.add_argument('--raw-string', metavar="RAW-STRING",
@@ -233,7 +233,7 @@ def main() -> None:
         exit(2)
 
     # Got the data, output
-    log.debug("Cert data: '{}'".format(covid_cert_data))
+    log.debug("Cert data: '{0}'".format(covid_cert_data))
     output_covid_cert_data(covid_cert_data, args.certificate_db_json_file)
 
 

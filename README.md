@@ -3,7 +3,7 @@ Python script to decode the EU Covid-19 vaccine certificate, as [specified by th
 
 This script takes an image with a QR code of a vaccine certificate as
 the parameter and will show the certificate's content.
-**It will not validate the signature.**
+It will also validate the digital signature.
 
 The code is very short and should provide an easy way to understand
 how these certificates are encoded:
@@ -13,14 +13,21 @@ how these certificates are encoded:
 * Decoding the base45 leads to zlib-compressed data.
 * Decompression leads to a CBOR Web Token structure.
 
-## setup
+## Setup
 
-You will need the python pillow, pyzbar, cbor2 and base45 packages. Additionally, you need zbar. For Mac OS X, it can be installed via `brew install zbar`, on Debian systems via `apt install libzbar0`. [Source](https://pypi.org/project/pyzbar/)
+You will need:
+* pillow for image handling
+* pyzbar for reading QR-code
+* base45, cbor2 and cose packages for [RFC-8152 data structure](https://datatracker.ietf.org/doc/html/rfc8152) reading
+* Additionally, you need zbar
+  * For Mac OS X, it can be installed via `brew install zbar`
+  * Debian systems via `apt install libzbar0`. [Source](https://pypi.org/project/pyzbar/)
+  * Fedora / Red Hat `dnf install zbar`
 
-You can install them via your distribution or via pip:
+Install them via your distribution or via pip:
 
 ```
-pip install base45 cbor2 pillow pyzbar
+pip install -r requirements.txt
 ```
 
 ## usage
@@ -75,10 +82,10 @@ $ ./vacdec samples/Sweden-2.png
 
 
 # EU Digital COVID Certificate
-(formerly known as Digital Green Certificate)
+(Note: formerly known as Digital Green Certificate)
 
 ## Specifications
-What's in a EU COVID Passport?
+What's in a EU Digital COVID/Green Certificate?
 * Value Sets for Digital Green Certificates https://ec.europa.eu/health/sites/default/files/ehealth/docs/digital-green-certificates_dt-specifications_en.pdf
 * JSON schema: https://github.com/ehn-dcc-development/ehn-dcc-schema
 
@@ -93,9 +100,8 @@ https://github.com/eu-digital-green-certificates/dgc-testdata
   * https://github.com/lovasoa/sanipasse
   * JSON-list: https://raw.githubusercontent.com/lovasoa/sanipasse/master/src/assets/Digital_Green_Certificate_Signing_Keys.json
 * Swedish list of all certificates: https://dgcg.covidbevis.se/tp/
-* Finland: https://www.kanta.fi/jarjestelmakehittajat/kansallisen-rokotustodistuksen-verifiointi
-** CA Root cert: https://dvv.fi/ca-varmenteet
 
 ## author
 
 Written by [Hanno Böck](https://hboeck.de/).
+Signature verificatiton by [Jari Turkia](https://blog.hqcodeshop.fi/).
