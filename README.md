@@ -5,6 +5,8 @@ This script takes an image with a QR code of a vaccine certificate as
 the parameter and will show the certificate's content.
 **It will not validate the signature.**
 
+A [fork of this script with signature verification exists](https://github.com/HQJaTu/vacdec/tree/signature-verification).
+
 The code is very short and should provide an easy way to understand
 how these certificates are encoded:
 
