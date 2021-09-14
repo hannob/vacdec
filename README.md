@@ -36,6 +36,8 @@ Run:
 [image] can be an image in any format pillow supports, including of
 course PNG and JPG.
 
+A test certificate can be found [here](https://github.com/Digitaler-Impfnachweis/certification-apis/tree/master/examples).
+
 ## author
 
 Written by [Hanno Böck](https://hboeck.de/).
