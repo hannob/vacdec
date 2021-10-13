@@ -20,7 +20,7 @@ ap.add_argument("-c", "--commandline", action="store_true",
 args = ap.parse_args()
 
 if args.textfile:
-    with open(args.input[0], "r") as f:
+    with open(args.input[0]) as f:
         cert = f.read()
 elif args.commandline:
     cert = args.input[0]
