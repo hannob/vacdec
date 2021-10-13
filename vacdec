@@ -3,14 +3,33 @@
 import sys
 import zlib
 import pprint
+import argparse
 
 import PIL.Image
 import pyzbar.pyzbar
 import base45
 import cbor2
 
-data = pyzbar.pyzbar.decode(PIL.Image.open(sys.argv[1]))
-cert = data[0].data.decode()
+ap = argparse.ArgumentParser()
+ap.add_argument("input", nargs=1,
+                help="Filename (default: image file, e.g. png/jpg)")
+ap.add_argument("-t", "--textfile", action="store_true",
+                help="Input as text file")
+ap.add_argument("-c", "--commandline", action="store_true",
+                help="Input via command line")
+args = ap.parse_args()
+
+if args.textfile:
+    with open(args.input[0], "r") as f:
+        cert = f.read()
+elif args.commandline:
+    cert = args.input[0]
+else:
+    data = pyzbar.pyzbar.decode(PIL.Image.open(args.input[0]))
+    if data == []:
+        sys.stderr.write("Error: Unable to decode QR code")
+        sys.exit(1)
+    cert = data[0].data.decode()
 
 b45data = cert.replace("HC1:", "")
 
