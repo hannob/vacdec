@@ -27,7 +27,7 @@ elif args.commandline:
 else:
     data = pyzbar.pyzbar.decode(PIL.Image.open(args.input[0]))
     if data == []:
-        sys.stderr.write("Error: Unable to decode QR code")
+        sys.stderr.write("Error: Unable to decode QR code\n")
         sys.exit(1)
     cert = data[0].data.decode()
 
