@@ -237,18 +237,22 @@ def output_covid_cert_data(cert: str, keys_file: str) -> None:
     # pprint.pprint(cose_msg)
 
     # decode the CBOR encoded payload and print as json
-    log.debug(cose_msg.phdr)
-    if KID in cose_msg.phdr:
+    pkid, ukid = cose_msg.phdr.get(KID), cose_msg.uhdr.get(KID)
+    if not pkid and not ukid:
+        log.info("Certificate is not signed")
+    else:
+        if (pkid and ukid) and (pkid != ukid):
+            log.info("Both protected and unprotected headers contain differing key references, defaulting to the protected one")
+        elif ukid and not pkid:
+            log.info("Protected header key reference missing, using the unprotected one")
+        kid = pkid or ukid
         log.info("COVID certificate signed with X.509 certificate.")
-        log.info("X.509 in DER form has SHA-256 beginning with: {0}".format(
-            cose_msg.phdr[KID].hex()))
-        key = find_key(cose_msg.phdr[KID], keys_file)
+        log.info("X.509 in DER form has SHA-256 beginning with: {0}".format(kid.hex()))
+        key = find_key(kid, keys_file)
         if key:
             verify_signature(cose_msg, key)
         else:
             log.info("Skip verify as no key found from database")
-    else:
-        log.info("Certificate is not signed")
     # log.debug(cose_msg.uhdr)
     # log.debug(cose_msg.key)
     cbor = cbor2.loads(cose_msg.payload)
