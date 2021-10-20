@@ -38,8 +38,9 @@ def _setup_logger() -> None:
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setFormatter(log_formatter)
     console_handler.propagate = False
-    logging.getLogger().addHandler(console_handler)
-    # log.setLevel(logging.DEBUG)
+    log = logging.getLogger()
+    log.addHandler(console_handler)
+    #log.setLevel(logging.DEBUG)
     log.setLevel(logging.INFO)
 
 
@@ -68,7 +69,7 @@ def find_key(key: KID, keys_file: str) -> Optional[cosekey.CoseKey]:
             log.debug("Certificate subject: {}".format(', '.join(subject_parts)))
         else:
             log.debug("Certificate has no subject")
-        log.info("Using certificate {}".format(pem_filename))
+        log.info("Using X.509 certificate {}".format(pem_filename))
         cose_key = _cert_to_cose_key(cert, key)
     else:
         # Read the JSON-database of all known keys
@@ -79,7 +80,7 @@ def find_key(key: KID, keys_file: str) -> Optional[cosekey.CoseKey]:
         for key_id, key_data in known_keys.items():
             key_id_binary = base64.b64decode(key_id)
             if key_id_binary == key:
-                log.info("Found the key from DB!")
+                log.info("Found the raw key from DB-file {}!".format(keys_file))
                 # pprint(key_data)
                 # check if the point is uncompressed rather than compressed
                 x, y = public_ec_key_points(base64.b64decode(key_data['publicKeyPem']))
@@ -297,6 +298,7 @@ def main() -> None:
     if image_file:
         data = pyzbar.pyzbar.decode(PIL.Image.open(image_file))
         covid_cert_data = data[0].data.decode()
+        log.debug("QR-code has: {}".format(covid_cert_data))
     elif args.raw_string:
         covid_cert_data = args.raw_string
     else:
