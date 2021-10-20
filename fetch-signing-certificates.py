@@ -27,6 +27,8 @@ API_COUNTRY_AUSTRIA = "Austria"
 API_COUNTRIES = (API_COUNTRY_AUSTRIA)
 
 API_ENDPOINT_AUSTRIA = "https://greencheck.gv.at/api/masterdata"
+API_ENDPOINT_AUSTRIA_V2 = "https://greencheck.gv.at/api/v2/masterdata"
+API_AUSTRIA_V2_CLIENT_VERSION = "1.6"
 
 
 def _setup_logger() -> None:
@@ -122,8 +124,13 @@ def _save_certs(trusted_list: bytes, destination_dir: str) -> dict:
 
 
 def fetch_certificates_austria_api(destination_dir: str) -> dict:
-    log.debug("Get trust list from Austria API endpoint: {}".format(API_ENDPOINT_AUSTRIA))
-    response = requests.get(API_ENDPOINT_AUSTRIA, timeout=5.0)
+    log.debug("Get trust list from Austria API endpoint: {}".format(API_ENDPOINT_AUSTRIA_V2))
+    request_headers = {
+        'x-app-version': API_AUSTRIA_V2_CLIENT_VERSION,
+        'x-app-type': 'browser',
+        'Accept': 'application/json'
+    }
+    response = requests.get(API_ENDPOINT_AUSTRIA_V2, timeout=5.0, headers=request_headers)
     response.raise_for_status()
 
     json_data = response.json()
@@ -157,7 +164,7 @@ def fetch_certificates_austria_api(destination_dir: str) -> dict:
     sig.key = root_key
     if not sig.verify_signature():
         raise RuntimeError("Austrian list doesn't verify!")
-    log.info("Signature of {} verified ok.".format(API_ENDPOINT_AUSTRIA))
+    log.info("Signature of {} verified ok.".format(API_ENDPOINT_AUSTRIA_V2))
 
     # Save verified list of certificates
     return _save_certs(list_bytes, destination_dir)
