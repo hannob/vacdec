@@ -11,7 +11,7 @@ f.close()
 
 setuptools.setup(
     name=package_name,
-    version="0.0.1",
+    version="0.0.2",
     description="Decode the EU Covid-19 vaccine certificate",
     long_description=readme,
     long_description_content_type='text/markdown',
