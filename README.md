@@ -36,6 +36,10 @@ Run:
 [image] can be an image in any format pillow supports, including of
 course PNG and JPG.
 
+The certificate can also be provided as string via command line with the option `-c` or from a text file with the option `-t`.
+
+There's also a verbose mode (`-v`) that translates the dates from Unix to UTC and decodes the json field values (name of the vaccine, type of test...).
+
 A test certificate can be found [here](https://github.com/Digitaler-Impfnachweis/certification-apis/tree/master/examples).
 
 ## author
