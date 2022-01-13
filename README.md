@@ -17,7 +17,7 @@ how these certificates are encoded:
 
 ## setup
 
-You will need the python pillow, pyzbar, cbor2 and base45 packages. Additionally, you need zbar. For Mac OS X, it can be installed via `brew install zbar`, on Debian systems via `apt install libzbar0`. [Source](https://pypi.org/project/pyzbar/).
+You will need the python pillow, pyzbar, cbor2 and base45 packages. Additionally, you need zbar. For Mac OS X, it can be installed via `brew install zbar`, on Debian systems via `apt install libzbar0`. [Source](https://pypi.org/project/pyzbar/)
 If you want to install `cbor2` on Windows, you might get an error that you need the Microsoft Visual C++ Extension installed. This is only required if you want to have the `cbor2` optional C extension installed. You can skip it by setting the environment variable `CBOR2_BUILD_C_EXTENSION=0` before installing it via `pip`.
 
 You can install them via your distribution or via pip:
