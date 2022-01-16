@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import re
 import sys
 import zlib
 import pprint
@@ -31,7 +32,9 @@ else:
         sys.exit(1)
     cert = data[0].data.decode()
 
-b45data = cert.replace("HC1:", "")
+nospaces = cert.strip()
+
+b45data = nospaces if not re.match(r"[a-zA-Z0-9]{3}:", nospaces[:4]) else nospaces[4:]
 
 zlibdata = base45.b45decode(b45data)
 
